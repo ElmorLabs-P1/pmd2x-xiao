@@ -3,6 +3,17 @@
 This Arduino sketch matches the PMD2 SPI3 slave implementation in
 `Core/Src/spi_slave.c`.
 
+## Status
+
+This repo currently contains just the single Arduino sketch
+(`PMD2_XIAO_ESP32C6_SPI_Master.ino`), copied as-is from the `pmd2x` branch of
+[ElmorLabs/PMD2-FW](https://github.com/ElmorLabs/PMD2-FW/tree/pmd2x)
+(`Arduino/PMD2_XIAO_ESP32C6_SPI_Master/`). It is the starting point for
+further development; the PMD2 STM32 firmware itself (the SPI3 slave side)
+lives in the upstream PMD2-FW repo, not here.
+
+No build tooling, CI, or additional sketches have been added yet.
+
 ## Wiring
 
 - XIAO default `SPI SCK` -> PMD2 `SPI3_SCK` (PC10 on STM32)
