@@ -1089,14 +1089,16 @@ void setup() {
 
   // Captive portal detection probes (only matter while on the fallback AP;
   // harmless to register unconditionally since they're never hit once on
-  // a real LAN and DNS is no longer redirecting everything here).
+  // a real LAN and DNS is no longer redirecting everything here). Only
+  // these specific OS-known paths redirect to /setup - everything else
+  // (including "/") is served normally, so the dashboard stays reachable
+  // and a stray request doesn't get silently redirected away from it.
   server.on("/generate_204", HTTP_GET, handleAndroidGenerate204);        // Android
   server.on("/gen_204", HTTP_GET, handleAndroidGenerate204);             // Android (older)
   server.on("/hotspot-detect.html", HTTP_GET, handleCaptivePortalRedirect); // Apple
   server.on("/library/test/success.html", HTTP_GET, handleCaptivePortalRedirect); // Apple
   server.on("/ncsi.txt", HTTP_GET, handleCaptivePortalRedirect);         // Windows
   server.on("/connecttest.txt", HTTP_GET, handleCaptivePortalRedirect);  // Windows
-  server.onNotFound(handleCaptivePortalRedirect);
 
   server.begin();
 
