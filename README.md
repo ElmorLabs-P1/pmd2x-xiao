@@ -6,13 +6,15 @@ This Arduino sketch matches the PMD2 SPI3 slave implementation in
 ## Status
 
 This repo currently contains just the single Arduino sketch
-(`PMD2_XIAO_ESP32C6_SPI_Master.ino`), copied as-is from the `pmd2x` branch of
+(`PMD2_XIAO_ESP32C6_SPI_Master/PMD2_XIAO_ESP32C6_SPI_Master.ino`), originally
+copied as-is from the `pmd2x` branch of
 [ElmorLabs/PMD2-FW](https://github.com/ElmorLabs/PMD2-FW/tree/pmd2x)
 (`Arduino/PMD2_XIAO_ESP32C6_SPI_Master/`). It is the starting point for
 further development; the PMD2 STM32 firmware itself (the SPI3 slave side)
 lives in the upstream PMD2-FW repo, not here.
 
-No build tooling, CI, or additional sketches have been added yet.
+CI compiles the sketch on every push/PR (see `.github/workflows/ci.yml`); no
+release workflow or additional sketches have been added.
 
 ## Wiring
 
@@ -45,9 +47,12 @@ Supported commands in firmware (`pmd2.h`):
 
 1. Install ESP32 board support in Arduino IDE.
 2. Select **Seeed XIAO ESP32C6**.
-3. Open `PMD2_XIAO_ESP32C6_SPI_Master.ino`.
-4. Build and upload.
-5. Open Serial Monitor at **115200 baud**.
+3. In `PMD2_XIAO_ESP32C6_SPI_Master/`, copy `wifi_config.h.example` to
+   `wifi_config.h` and fill in your WiFi SSID/password. `wifi_config.h` is
+   gitignored so your credentials are never committed.
+4. Open `PMD2_XIAO_ESP32C6_SPI_Master/PMD2_XIAO_ESP32C6_SPI_Master.ino`.
+5. Build and upload.
+6. Open Serial Monitor at **115200 baud**.
 
 ## Serial commands
 

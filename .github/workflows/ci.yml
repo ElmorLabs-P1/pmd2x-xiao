@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create wifi_config.h from example
+        run: cp PMD2_XIAO_ESP32C6_SPI_Master/wifi_config.h.example PMD2_XIAO_ESP32C6_SPI_Master/wifi_config.h
+
+      - name: Compile sketch for Seeed XIAO ESP32C6
+        uses: arduino/compile-sketches@v1
+        with:
+          fqbn: esp32:esp32:XIAO_ESP32C6
+          platforms: |
+            - name: esp32:esp32
+              source-url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          sketch-paths: |
+            - PMD2_XIAO_ESP32C6_SPI_Master

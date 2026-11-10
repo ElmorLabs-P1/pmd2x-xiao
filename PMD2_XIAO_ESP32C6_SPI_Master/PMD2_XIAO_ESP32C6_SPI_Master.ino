@@ -2,10 +2,7 @@
 #include <SPI.h>
 #include <WiFi.h>
 #include <WebServer.h>
-
-// ====== WiFi Config ======
-const char* WIFI_SSID = "xxx";
-const char* WIFI_PASS = "xxx";
+#include "wifi_config.h"
 
 WebServer server(80);
 String webInputLine;
