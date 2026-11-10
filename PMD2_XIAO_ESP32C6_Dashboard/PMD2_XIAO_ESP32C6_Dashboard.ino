@@ -658,7 +658,7 @@ void handleCaptivePortalRedirect() {
     server.send(404, "text/plain", "Not found");
     return;
   }
-  server.sendHeader("Location", "/setup", true);
+  server.sendHeader("Location", "/", true);
   server.send(302, "text/plain", "");
 }
 
