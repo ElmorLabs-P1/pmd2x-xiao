@@ -1,0 +1,108 @@
+name: Release firmware
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create wifi_config.h from example
+        run: |
+          cp PMD2_XIAO_ESP32C6_SPI_Master/wifi_config.h.example PMD2_XIAO_ESP32C6_SPI_Master/wifi_config.h
+          cp PMD2_XIAO_ESP32C6_Dashboard/wifi_config.h.example PMD2_XIAO_ESP32C6_Dashboard/wifi_config.h
+
+      - name: Install arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 core
+        run: |
+          arduino-cli config init
+          arduino-cli config set board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Install NimBLE-Arduino
+        run: arduino-cli lib install "NimBLE-Arduino"
+
+      - name: Build SPI_Master firmware
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:XIAO_ESP32C6 \
+            --export-binaries \
+            PMD2_XIAO_ESP32C6_SPI_Master
+
+      - name: Build Dashboard firmware
+        run: |
+          arduino-cli compile \
+            --fqbn "esp32:esp32:XIAO_ESP32C6:PartitionScheme=no_ota" \
+            --export-binaries \
+            PMD2_XIAO_ESP32C6_Dashboard
+
+      - name: Assemble GitHub Pages site
+        run: |
+          set -eu
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          mkdir -p site/spi-master site/dashboard
+          cp docs/index.html site/index.html
+
+          cp PMD2_XIAO_ESP32C6_SPI_Master/build/esp32.esp32.XIAO_ESP32C6/PMD2_XIAO_ESP32C6_SPI_Master.ino.merged.bin \
+            site/spi-master/firmware.bin
+          cp PMD2_XIAO_ESP32C6_Dashboard/build/esp32.esp32.XIAO_ESP32C6/PMD2_XIAO_ESP32C6_Dashboard.ino.merged.bin \
+            site/dashboard/firmware.bin
+
+          cat > site/spi-master/manifest.json <<EOF
+          {
+            "name": "PMD2X XIAO SPI Master",
+            "version": "$VERSION",
+            "builds": [
+              {
+                "chipFamily": "ESP32-C6",
+                "parts": [{ "path": "firmware.bin", "offset": 0 }]
+              }
+            ]
+          }
+          EOF
+
+          cat > site/dashboard/manifest.json <<EOF
+          {
+            "name": "PMD2X XIAO Dashboard",
+            "version": "$VERSION",
+            "builds": [
+              {
+                "chipFamily": "ESP32-C6",
+                "parts": [{ "path": "firmware.bin", "offset": 0 }]
+              }
+            ]
+          }
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
