@@ -489,9 +489,14 @@ static bool isSensorFramePlausible(const SensorStruct& s) {
   // Vdd: supply rail in mV, expected close to 3.3 V.
   if (s.Vdd < 2500 || s.Vdd > 3900) return false;
 
-  // Chip and coolant temperatures in tenths of a degree C.
+  // Chip temperature, and the two 12VHPWR thermistors, in tenths of a
+  // degree C. 0x7FFF (PMD2X_TS_NOT_CONNECTED) is the firmware's normal
+  // sentinel for "no thermistor plugged into this sense wire" - a valid
+  // reading, not implausible data.
   if (s.Tchip > 1500) return false;
+  static constexpr int16_t TS_NOT_CONNECTED = 0x7FFF;
   for (size_t i = 0; i < SENSOR_TS_NUM; ++i) {
+    if (s.Ts[i] == TS_NOT_CONNECTED) continue;
     if (s.Ts[i] < -400 || s.Ts[i] > 1500) return false;
   }
 
