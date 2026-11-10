@@ -3,10 +3,13 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
-#include "wifi_config.h"   // defines WIFI_SSID and WIFI_PASS
+#include <Preferences.h>
+#include <NimBLEDevice.h>
+#include "wifi_config.h"   // optional compiled-in defaults: WIFI_SSID / WIFI_PASS
 
 WebServer server(80);
 String webOutputBuffer;
+Preferences g_prefs;
 
 // ====== Configuration ======
 static constexpr uint32_t SERIAL_BAUD = 115200;
@@ -20,6 +23,105 @@ static constexpr size_t WEB_LOG_MAX = 4096;
 static const char* MDNS_NAME = "pmd2";                 // http://pmd2.local
 static const char* AP_SSID = "PMD2-Dashboard";         // fallback access point
 static const char* AP_PASS = "pmd2pmd2";               // min. 8 characters
+
+// ====== BLE WiFi provisioning ======
+// Lets a phone (e.g. nRF Connect, LightBlue, or a custom app) write WiFi
+// credentials over BLE instead of requiring them to be compiled in. Stored
+// in NVS via Preferences so they survive reboots and re-flashing of the
+// sketch itself.
+static const char* BLE_DEVICE_NAME = "PMD2-Setup";
+static const char* BLE_SERVICE_UUID       = "7a0a1000-0000-1000-8000-00805f9b34fb";
+static const char* BLE_CHAR_SSID_UUID     = "7a0a1001-0000-1000-8000-00805f9b34fb";
+static const char* BLE_CHAR_PASS_UUID     = "7a0a1002-0000-1000-8000-00805f9b34fb";
+static const char* BLE_CHAR_APPLY_UUID    = "7a0a1003-0000-1000-8000-00805f9b34fb";
+static const char* BLE_CHAR_STATUS_UUID   = "7a0a1004-0000-1000-8000-00805f9b34fb";
+
+static NimBLECharacteristic* g_bleStatusChar = nullptr;
+static String g_pendingSsid;
+static String g_pendingPass;
+static volatile bool g_bleApplyRequested = false;
+
+class ProvisioningCallbacks : public NimBLECharacteristicCallbacks {
+  void onWrite(NimBLECharacteristic* c, NimBLEConnInfo& connInfo) override {
+    if (c->getUUID().equals(NimBLEUUID(BLE_CHAR_SSID_UUID))) {
+      g_pendingSsid = c->getValue();
+    } else if (c->getUUID().equals(NimBLEUUID(BLE_CHAR_PASS_UUID))) {
+      g_pendingPass = c->getValue();
+    } else if (c->getUUID().equals(NimBLEUUID(BLE_CHAR_APPLY_UUID))) {
+      g_bleApplyRequested = true;
+    }
+  }
+};
+
+void bleSetStatus(const char* s) {
+  if (!g_bleStatusChar) return;
+  g_bleStatusChar->setValue(s);
+  g_bleStatusChar->notify();
+}
+
+// Starts a BLE GATT service for WiFi provisioning. Safe to run alongside
+// WiFi/AP mode: the ESP32C6's BLE and WiFi radios share the antenna but the
+// Arduino core handles coexistence, no extra wiring needed.
+void startProvisioningBle() {
+  NimBLEDevice::init(BLE_DEVICE_NAME);
+  NimBLEServer* bleServer = NimBLEDevice::createServer();
+  NimBLEService* svc = bleServer->createService(BLE_SERVICE_UUID);
+
+  auto* callbacks = new ProvisioningCallbacks();
+
+  NimBLECharacteristic* ssidChar = svc->createCharacteristic(
+      BLE_CHAR_SSID_UUID, NIMBLE_PROPERTY::WRITE);
+  ssidChar->setCallbacks(callbacks);
+
+  NimBLECharacteristic* passChar = svc->createCharacteristic(
+      BLE_CHAR_PASS_UUID, NIMBLE_PROPERTY::WRITE);
+  passChar->setCallbacks(callbacks);
+
+  NimBLECharacteristic* applyChar = svc->createCharacteristic(
+      BLE_CHAR_APPLY_UUID, NIMBLE_PROPERTY::WRITE);
+  applyChar->setCallbacks(callbacks);
+
+  g_bleStatusChar = svc->createCharacteristic(
+      BLE_CHAR_STATUS_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+  g_bleStatusChar->setValue("idle");
+
+  svc->start();
+
+  NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
+  adv->addServiceUUID(BLE_SERVICE_UUID);
+  adv->start();
+}
+
+// Applies pending BLE-provisioned credentials: save to NVS, then reconnect
+// WiFi using them. Called from loop() so it runs outside the BLE callback.
+void applyPendingWifiCredentials() {
+  g_bleApplyRequested = false;
+  if (g_pendingSsid.length() == 0) {
+    bleSetStatus("error: empty ssid");
+    return;
+  }
+
+  g_prefs.putString("ssid", g_pendingSsid);
+  g_prefs.putString("pass", g_pendingPass);
+  bleSetStatus("connecting");
+
+  WiFi.disconnect();
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(g_pendingSsid.c_str(), g_pendingPass.c_str());
+
+  const uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && (millis() - t0) < WIFI_TIMEOUT_MS) {
+    delay(250);
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    dualPrint("BLE provisioning: WiFi connected, IP: " + WiFi.localIP().toString());
+    bleSetStatus(("connected:" + WiFi.localIP().toString()).c_str());
+  } else {
+    dualPrint("BLE provisioning: WiFi connect failed, staying on AP");
+    bleSetStatus("error: connect failed");
+  }
+}
 
 // ====== PMD2 protocol ======
 static constexpr uint8_t CMD_WELCOME = 0x00;
@@ -84,6 +186,8 @@ struct DeviceConfigStruct {
   CalibrationStruct Calibration;
 };
 #pragma pack(pop)
+
+void printConfigSummary(const DeviceConfigStruct& cfg, const char* label);
 
 static_assert(sizeof(VendorDataStruct) == 3, "VendorDataStruct size mismatch");
 static_assert(sizeof(SensorStruct) == 192, "SensorStruct size mismatch");
@@ -756,11 +860,18 @@ void setup() {
 
   printHelp();
 
-  // WiFi: try the configured network, fall back to a private access point.
+  g_prefs.begin("pmd2", false);
+
+  // WiFi credentials: prefer what's stored in NVS (set via BLE provisioning
+  // or a previous run); fall back to the compiled-in wifi_config.h defaults
+  // the first time the device boots.
+  String ssid = g_prefs.getString("ssid", WIFI_SSID);
+  String pass = g_prefs.getString("pass", WIFI_PASS);
+
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(MDNS_NAME);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  dualPrint("Connecting to WiFi...");
+  WiFi.begin(ssid.c_str(), pass.c_str());
+  dualPrint("Connecting to WiFi \"" + ssid + "\"...");
 
   const uint32_t t0 = millis();
   while (WiFi.status() != WL_CONNECTED && (millis() - t0) < WIFI_TIMEOUT_MS) {
@@ -777,6 +888,9 @@ void setup() {
     WiFi.softAP(AP_SSID, AP_PASS);
     dualPrint("WiFi failed. Started AP \"" + String(AP_SSID) + "\", IP: " + WiFi.softAPIP().toString());
   }
+
+  startProvisioningBle();
+  dualPrint("BLE provisioning: advertising as \"" + String(BLE_DEVICE_NAME) + "\"");
 
   if (MDNS.begin(MDNS_NAME)) {
     MDNS.addService("http", "tcp", 80);
@@ -830,6 +944,11 @@ void loop() {
       webOutputBuffer = "";
       sampleOnce();
     }
+  }
+
+  // BLE-provisioned WiFi credentials, applied outside the BLE callback
+  if (g_bleApplyRequested) {
+    applyPendingWifiCredentials();
   }
 
   // Web server

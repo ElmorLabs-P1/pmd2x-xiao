@@ -1,7 +1,10 @@
 #pragma once
 
-// Copy this file to wifi_config.h (which is gitignored) and fill in your
-// real WiFi credentials. wifi_config.h is included by the .ino sketch.
+// Optional compiled-in WiFi defaults, used only on first boot before any
+// credentials have been saved via BLE provisioning or a previous run.
+// Copy this file to wifi_config.h (which is gitignored) if you want to set
+// defaults; otherwise leave the strings empty and provision over BLE
+// (device "PMD2-Setup") or let it fall back to the "PMD2-Dashboard" AP.
 
-const char* WIFI_SSID = "your-ssid";
-const char* WIFI_PASS = "your-password";
+const char* WIFI_SSID = "";
+const char* WIFI_PASS = "";

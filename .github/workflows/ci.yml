@@ -16,7 +16,7 @@ jobs:
           cp PMD2_XIAO_ESP32C6_SPI_Master/wifi_config.h.example PMD2_XIAO_ESP32C6_SPI_Master/wifi_config.h
           cp PMD2_XIAO_ESP32C6_Dashboard/wifi_config.h.example PMD2_XIAO_ESP32C6_Dashboard/wifi_config.h
 
-      - name: Compile sketches for Seeed XIAO ESP32C6
+      - name: Compile SPI_Master sketch for Seeed XIAO ESP32C6
         uses: arduino/compile-sketches@v1
         with:
           fqbn: esp32:esp32:XIAO_ESP32C6
@@ -25,4 +25,17 @@ jobs:
               source-url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
           sketch-paths: |
             - PMD2_XIAO_ESP32C6_SPI_Master
+
+      - name: Compile Dashboard sketch for Seeed XIAO ESP32C6
+        uses: arduino/compile-sketches@v1
+        with:
+          # No OTA (2MB APP/2MB SPIFFS): WiFi + WebServer + BLE together
+          # don't fit in the default 1.2MB app partition.
+          fqbn: esp32:esp32:XIAO_ESP32C6:PartitionScheme=no_ota
+          platforms: |
+            - name: esp32:esp32
+              source-url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          libraries: |
+            - name: NimBLE-Arduino
+          sketch-paths: |
             - PMD2_XIAO_ESP32C6_Dashboard
