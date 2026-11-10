@@ -88,6 +88,11 @@ void startProvisioningBle() {
   svc->start();
 
   NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
+  adv->setName(BLE_DEVICE_NAME);
+  // Keep the 128-bit service UUID out of the primary advertising packet
+  // (it alone nearly fills the 31-byte legacy payload) and into the scan
+  // response instead, so the device name is reliably visible in scanners.
+  adv->enableScanResponse(true);
   adv->addServiceUUID(BLE_SERVICE_UUID);
   adv->start();
 }
@@ -464,15 +469,40 @@ void resetStats() {
   g_statsStartMs = millis();
 }
 
+// Heuristic sanity check for a SensorStruct frame. A missing/unpowered PMD2
+// (or a floating SPI bus with nothing attached) reads back all 0xFF, all
+// 0x00, or other garbage that falls outside plausible ranges for the
+// values the PMD2 actually reports.
+static bool isSensorFramePlausible(const SensorStruct& s) {
+  const bool allFF = (s.Vdd == 0xFFFF && s.Tchip == 0xFFFF);
+  const bool all00 = (s.Vdd == 0 && s.Tchip == 0 && s.TotalPower == 0);
+  if (allFF || all00) return false;
+
+  // Vdd: supply rail in mV, expected close to 3.3 V.
+  if (s.Vdd < 2500 || s.Vdd > 3900) return false;
+
+  // Chip and coolant temperatures in tenths of a degree C.
+  if (s.Tchip > 1500) return false;
+  for (size_t i = 0; i < SENSOR_TS_NUM; ++i) {
+    if (s.Ts[i] < -400 || s.Ts[i] > 1500) return false;
+  }
+
+  // Power rails: this is a PC power-delivery monitor, not a power plant.
+  static constexpr uint16_t MAX_PLAUSIBLE_WATTS = 3000;
+  if (s.TotalPower > MAX_PLAUSIBLE_WATTS || s.EpsPower > MAX_PLAUSIBLE_WATTS ||
+      s.PciePower > MAX_PLAUSIBLE_WATTS || s.MbPower > MAX_PLAUSIBLE_WATTS) {
+    return false;
+  }
+
+  return true;
+}
+
 // Reads one sensor frame quietly and updates history + running stats.
 void sampleTick() {
   SensorStruct s;
   spiCommandReadRaw(CMD_READ_SENSOR_VALUES, reinterpret_cast<uint8_t*>(&s), sizeof(s));
 
-  // Heuristic: a missing/unpowered PMD2 reads back all 0xFF or all 0x00.
-  const bool allFF = (s.Vdd == 0xFFFF && s.Tchip == 0xFFFF);
-  const bool all00 = (s.Vdd == 0 && s.Tchip == 0 && s.TotalPower == 0);
-  g_sensorValid = !(allFF || all00);
+  g_sensorValid = isSensorFramePlausible(s);
   if (!g_sensorValid) return;
 
   g_sensor = s;
