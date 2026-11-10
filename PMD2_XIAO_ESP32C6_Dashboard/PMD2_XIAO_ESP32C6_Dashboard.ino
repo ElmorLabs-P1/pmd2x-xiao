@@ -547,17 +547,17 @@ static const char PAGE_SETUP[] PROGMEM = R"HTML(<!DOCTYPE html><html lang="en"><
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PMD2 WiFi Setup</title>
 <style>
-body{margin:0;background:#0e1116;color:#e6e9ee;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{margin:0;background:#f5f6f8;color:#15181d;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:420px;margin:40px auto;padding:0 16px}
-h1{font-size:20px}
-p.hint{color:#9aa4b2;font-size:14px}
-label{display:block;margin:16px 0 6px;font-size:13px;color:#9aa4b2}
-input{width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1px solid #2f3846;background:#161b22;color:#e6e9ee;font-size:16px}
-button{margin-top:20px;width:100%;padding:12px;border-radius:10px;border:none;background:#4cc9f0;color:#06222b;font-size:16px;font-weight:600;cursor:pointer}
+h1{font-size:20px;color:#0c1524}
+p.hint{color:#6b7280;font-size:14px}
+label{display:block;margin:16px 0 6px;font-size:13px;color:#6b7280}
+input{width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1px solid #e2e5ea;background:#fff;color:#15181d;font-size:16px}
+button{margin-top:20px;width:100%;padding:12px;border-radius:10px;border:none;background:#ff6a00;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
 #msg{margin-top:16px;font-size:14px}
-#msg.err{color:#ff8a8a}#msg.ok{color:#5be39b}
+#msg.err{color:#d1393c}#msg.ok{color:#1f9d55}
 </style></head><body><main>
-<p><a href="/" style="color:#9aa4b2;text-decoration:none">&larr; Dashboard</a></p>
+<p><a href="/" style="color:#6b7280;text-decoration:none">&larr; Dashboard</a></p>
 <h1>Connect PMD2 to your WiFi</h1>
 <p class="hint">Enter your home/office WiFi network. The device will save
 this and try to connect; it stays reachable at this address
@@ -672,43 +672,50 @@ static const char PAGE_DASH[] PROGMEM = R"HTML(<!DOCTYPE html><html lang="en"><h
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PMD2 Telemetry</title>
 <style>
-:root{--bg:#0e1116;--card:#161b22;--line:#262d38;--tx:#e6e9ee;--mut:#9aa4b2;--acc:#4cc9f0;--ok:#5be39b;--bad:#ff8a8a;
+:root{--bg:#f5f6f8;--card:#ffffff;--line:#e2e5ea;--tx:#15181d;--mut:#6b7280;--acc:#ff6a00;--navy:#0c1524;--ok:#1f9d55;--bad:#d1393c;
 --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);font-family:var(--sans)}
 main{max-width:1200px;margin:0 auto;padding:24px 16px 40px;display:flex;flex-direction:column;gap:16px}
 header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
-h1{margin:0;font-size:22px}
+h1{margin:0;font-size:22px;color:var(--navy)}
 .host{font:13px var(--mono);color:var(--mut);margin-left:12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;min-width:0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
 .lbl{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0 0 8px}
-.big{font:500 36px var(--mono);margin:0}
+.big{font:600 36px var(--mono);margin:0;color:var(--navy)}
 .u{font-size:15px;color:var(--mut);margin-left:6px}
 .sub{font-size:13px;color:var(--mut);margin:6px 0 0}
 .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .two{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
 .wide{grid-column:span 2}
 @media(max-width:700px){.wide{grid-column:auto}}
-.row{display:grid;grid-template-columns:68px 1fr 1fr 1fr 46px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #222a35;font:13px var(--mono);color:#cfd6df}
+.row{display:grid;grid-template-columns:68px 1fr 1fr 1fr 46px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font:13px var(--mono);color:var(--tx)}
 .nm{color:var(--mut)}.w{color:var(--tx)}
-.pill{font:600 11px var(--sans);border-radius:6px;padding:3px 0;text-align:center;background:#12301f;color:var(--ok)}
-.pill.trip{background:#3b1519;color:var(--bad)}
-.btn{font:500 14px var(--sans);min-height:44px;padding:0 18px;border-radius:10px;border:1px solid #2f3846;background:#1c232d;color:var(--tx);cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
-.btn.pri{background:var(--acc);border-color:var(--acc);color:#06222b}
-.btn.danger{border-color:#5a2a2e;color:var(--bad)}
-.bar{height:8px;border-radius:4px;background:#222a35;overflow:hidden}
+.pill{font:600 11px var(--sans);border-radius:6px;padding:3px 0;text-align:center;background:#e4f5ea;color:var(--ok)}
+.pill.trip{background:#fbe4e4;color:var(--bad)}
+.btn{font:500 14px var(--sans);min-height:44px;padding:0 18px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--navy);cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.danger{border-color:#f0b9ba;color:var(--bad)}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
 .bar>div{height:100%;background:var(--acc);width:0}
 .rail{display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px}
 .rail b{font:500 14px var(--mono)}
 .live{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut)}
-.live i{width:8px;height:8px;border-radius:50%;background:#6b7685}
+.live i{width:8px;height:8px;border-radius:50%;background:#b7bcc4}
 .live.on{color:var(--ok)}.live.on i{background:var(--ok)}
 .legend{display:flex;gap:20px;font-size:13px;color:var(--mut);margin-top:8px}
-#nodata{background:#3b1519;border:1px solid #5a2a2e;color:var(--bad);border-radius:10px;padding:12px 16px;font-size:14px}
+#nodata{background:#fbe4e4;border:1px solid #f0b9ba;color:var(--bad);border-radius:10px;padding:12px 16px;font-size:14px}
 dialog{background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:12px;max-width:520px;width:calc(100% - 32px)}
-dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog::backdrop{background:rgba(15,23,42,.5)}
 dialog pre{font:13px/1.6 var(--mono);white-space:pre-wrap;margin:0 0 16px}
 [hidden]{display:none!important}
+.pinbars{display:flex;align-items:flex-end;gap:10px;height:140px;padding:8px 4px 0}
+.pinbar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.pinbar .track{width:100%;max-width:28px;height:100%;background:var(--line);border-radius:6px 6px 0 0;display:flex;align-items:flex-end;overflow:hidden}
+.pinbar .fill{width:100%;background:var(--acc);border-radius:6px 6px 0 0;transition:height .3s ease}
+.pinbar .fill.trip{background:var(--bad)}
+.pinbar .val{font:600 12px var(--mono);color:var(--navy)}
+.pinbar .nm{font-size:11px;color:var(--mut)}
 </style></head><body><main>
 
 <header>
@@ -725,15 +732,13 @@ dialog pre{font:13px/1.6 var(--mono);white-space:pre-wrap;margin:0 0 16px}
 <section class="grid">
 <div class="card"><p class="lbl">Total power</p><p class="big" style="color:var(--acc)"><span id="tot">--</span><span class="u">W</span></p><p class="sub">Peak <span id="pk">--</span> W &middot; Avg <span id="av">--</span> W</p></div>
 <div class="card"><p class="lbl">Energy</p><p class="big"><span id="wh">--</span><span class="u">Wh</span></p><p class="sub">Since reset &middot; <span id="el">--:--</span> elapsed</p></div>
-<div class="card"><p class="lbl">Inlet / outlet</p><p class="big"><span id="tin">--</span><span class="u">&deg;C</span></p><p class="sub">Outlet <span id="tout">--</span> &deg;C &middot; &Delta; <span id="dt">--</span> &deg;C</p></div>
-<div class="card"><p class="lbl">Supply</p><p class="big"><span id="vdd">--</span><span class="u">V Vdd</span></p><p class="sub">Chip <span id="tc">--</span></p></div>
 </section>
 
 <section class="grid two">
 <div class="card wide">
 <p class="lbl">Power, last 5 minutes</p>
 <svg id="chart" viewBox="0 0 640 200" style="width:100%;height:auto;display:block" role="img" aria-label="Line chart of total and PCIe power over the last five minutes"></svg>
-<div class="legend"><span><span style="color:var(--acc)">&#9473;</span> Total</span><span><span style="color:#6b7685">&#9473;</span> PCIe</span></div>
+<div class="legend"><span><span style="color:var(--acc)">&#9473;</span> Total</span><span><span style="color:#0c1524">&#9473;</span> PCIe</span></div>
 </div>
 <div class="card" style="display:flex;flex-direction:column;gap:18px">
 <p class="lbl" style="margin:0">Rails</p>
@@ -741,6 +746,11 @@ dialog pre{font:13px/1.6 var(--mono);white-space:pre-wrap;margin:0 0 16px}
 <div><div class="rail"><span>PCIe</span><b><span id="r2">--</span> W</b></div><div class="bar"><div id="b2"></div></div></div>
 <div><div class="rail"><span>Motherboard</span><b><span id="r3">--</span> W</b></div><div class="bar"><div id="b3"></div></div></div>
 </div>
+</section>
+
+<section class="card">
+<p class="lbl">12VHPWR pin current (imbalance)</p>
+<div class="pinbars" id="pinbars"></div>
 </section>
 
 <section class="card">
@@ -785,16 +795,36 @@ function draw(){
   let g='';
   for(let k=0;k<=3;k++){
     const y=Y0+H*k/3;
-    g+='<line x1="40" y1="'+y+'" x2="630" y2="'+y+'" stroke="#262d38"/>';
-    g+='<text x="4" y="'+(y+4)+'" fill="#9aa4b2" font-size="11">'+Math.round(mx*(1-k/3))+(k==0?' W':'')+'</text>';
+    g+='<line x1="40" y1="'+y+'" x2="630" y2="'+y+'" stroke="#e2e5ea"/>';
+    g+='<text x="4" y="'+(y+4)+'" fill="#6b7280" font-size="11">'+Math.round(mx*(1-k/3))+(k==0?' W':'')+'</text>';
   }
-  g+='<text x="40" y="194" fill="#9aa4b2" font-size="11">-5 min</text><text x="596" y="194" fill="#9aa4b2" font-size="11">now</text>';
+  g+='<text x="40" y="194" fill="#6b7280" font-size="11">-5 min</text><text x="596" y="194" fill="#6b7280" font-size="11">now</text>';
   const pts=a=>a.map((v,i)=>(X0+W*((HL-n+i)/(HL-1))).toFixed(1)+','+(Y0+H*(1-v/mx)).toFixed(1)).join(' ');
   if(n>1){
-    g+='<polyline fill="none" stroke="#6b7685" stroke-width="2" points="'+pts(hist.p)+'"/>';
-    g+='<polyline fill="none" stroke="#4cc9f0" stroke-width="2.5" points="'+pts(hist.t)+'"/>';
+    g+='<polyline fill="none" stroke="#0c1524" stroke-width="2" points="'+pts(hist.p)+'"/>';
+    g+='<polyline fill="none" stroke="#ff6a00" stroke-width="2.5" points="'+pts(hist.t)+'"/>';
   }
   $('chart').innerHTML=g;
+}
+
+// Channels 10-15 are the six 12VHPWR sense wires (HPWR_W1-6). Bar heights
+// scale to the highest current among the six, not some fixed max, so an
+// imbalance between pins is visually obvious regardless of load level.
+const PIN_CH_START=10,PIN_CH_COUNT=6;
+function renderPinBars(ch){
+  const amps=[];
+  for(let i=0;i<PIN_CH_COUNT;i++){
+    const [,current,,ocp]=ch[PIN_CH_START+i];
+    amps.push({a:current/1000,ocp});
+  }
+  const maxA=Math.max(0.1,...amps.map(x=>x.a));
+  const html=amps.map((x,i)=>{
+    const pct=Math.max(2,Math.min(100,x.a/maxA*100));
+    return '<div class="pinbar"><span class="val">'+x.a.toFixed(2)+'A</span>'+
+      '<div class="track"><div class="fill'+(x.ocp?' trip':'')+'" style="height:'+pct+'%"></div></div>'+
+      '<span class="nm">'+CHANNEL_NAMES[PIN_CH_START+i]+'</span></div>';
+  }).join('');
+  $('pinbars').innerHTML=html;
 }
 
 function render(s){
@@ -803,9 +833,6 @@ function render(s){
   if(!s.ok)return;
   $('tot').textContent=s.total;$('pk').textContent=s.peak;$('av').textContent=Math.round(s.avg);
   $('wh').textContent=s.wh.toFixed(1);$('el').textContent=mmss(s.elapsed);
-  $('tin').textContent=(s.tsin/10).toFixed(1);$('tout').textContent=(s.tsout/10).toFixed(1);
-  $('dt').textContent=((s.tsout-s.tsin)/10).toFixed(1);
-  $('vdd').textContent=(s.vdd/1000).toFixed(2);$('tc').textContent=s.tchip;
   [[s.eps,'1'],[s.pcie,'2'],[s.mb,'3']].forEach(([v,k])=>{
     $('r'+k).textContent=v;$('b'+k).style.width=Math.min(100,v/Math.max(1,s.total)*100)+'%';
   });
@@ -815,6 +842,7 @@ function render(s){
     $('w'+k).textContent=(p/1000).toFixed(1)+' W';
     const e=$('o'+k);e.textContent=o?'OCP':'OK';e.className='pill'+(o?' trip':'');
   });
+  renderPinBars(s.ch);
   if(s.seq!==lastSeq){
     lastSeq=s.seq;hist.t.push(s.total);hist.p.push(s.pcie);
     if(hist.t.length>HL){hist.t.shift();hist.p.shift()}
