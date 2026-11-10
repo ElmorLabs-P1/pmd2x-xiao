@@ -536,6 +536,109 @@ void sampleTick() {
   g_energyPrimed = true;
 }
 
+// ====== WiFi setup page (served while running the fallback AP) ======
+// Lets a phone connect to the "PMD2-Dashboard" AP and enter the real LAN
+// WiFi credentials from a normal web form - no extra app needed, unlike
+// the BLE provisioning service above (kept for scripted/dev use).
+static const char PAGE_SETUP[] PROGMEM = R"HTML(<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PMD2 WiFi Setup</title>
+<style>
+body{margin:0;background:#0e1116;color:#e6e9ee;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:420px;margin:40px auto;padding:0 16px}
+h1{font-size:20px}
+p.hint{color:#9aa4b2;font-size:14px}
+label{display:block;margin:16px 0 6px;font-size:13px;color:#9aa4b2}
+input{width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1px solid #2f3846;background:#161b22;color:#e6e9ee;font-size:16px}
+button{margin-top:20px;width:100%;padding:12px;border-radius:10px;border:none;background:#4cc9f0;color:#06222b;font-size:16px;font-weight:600;cursor:pointer}
+#msg{margin-top:16px;font-size:14px}
+#msg.err{color:#ff8a8a}#msg.ok{color:#5be39b}
+</style></head><body><main>
+<p><a href="/" style="color:#9aa4b2;text-decoration:none">&larr; Dashboard</a></p>
+<h1>Connect PMD2 to your WiFi</h1>
+<p class="hint">Enter your home/office WiFi network. The device will save
+this and try to connect; it stays reachable at this address
+(<span id="apip"></span>) until it succeeds.</p>
+<label for="s">Network name (SSID)</label>
+<input id="s" autocapitalize="off" autocorrect="off">
+<label for="p">Password</label>
+<input id="p" type="password">
+<button id="go">Connect</button>
+<div id="msg"></div>
+<script>
+document.getElementById('apip').textContent = location.host;
+document.getElementById('go').onclick = async () => {
+  const ssid = document.getElementById('s').value;
+  const pass = document.getElementById('p').value;
+  const msg = document.getElementById('msg');
+  msg.className = '';
+  msg.textContent = 'Connecting...';
+  try {
+    const r = await fetch('/api/wifi-setup', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'ssid=' + encodeURIComponent(ssid) + '&pass=' + encodeURIComponent(pass)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      msg.className = 'ok';
+      msg.textContent = 'Connected! IP: ' + d.ip + '. Visit that address on your normal WiFi to reopen the dashboard.';
+    } else {
+      msg.className = 'err';
+      msg.textContent = 'Could not connect: ' + (d.error || 'unknown error') + '. Still on this AP, try again.';
+    }
+  } catch (e) {
+    msg.className = 'err';
+    msg.textContent = 'Request failed. Still on this AP, try again.';
+  }
+};
+</script>
+</main></body></html>)HTML";
+
+void handleSetupPage() {
+  server.send(200, "text/html", PAGE_SETUP);
+}
+
+// Saves SSID/password from the setup form, then tries to join that network
+// without ever dropping the AP - callers stay connected to "PMD2-Dashboard"
+// so they can see the result and retry from the same page on failure.
+void handleApiWifiSetup() {
+  const String ssid = server.arg("ssid");
+  const String pass = server.arg("pass");
+
+  if (ssid.length() == 0) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"empty ssid\"}");
+    return;
+  }
+
+  g_prefs.putString("ssid", ssid);
+  g_prefs.putString("pass", pass);
+
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.begin(ssid.c_str(), pass.c_str());
+
+  const uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && (millis() - t0) < WIFI_TIMEOUT_MS) {
+    delay(250);
+  }
+
+  char buf[160];
+  if (WiFi.status() == WL_CONNECTED) {
+    const String ip = WiFi.localIP().toString();
+    dualPrint("WiFi setup: connected, IP: " + ip);
+    snprintf(buf, sizeof(buf), "{\"ok\":true,\"ip\":\"%s\"}", ip.c_str());
+    bleSetStatus(("connected:" + ip).c_str());
+  } else {
+    dualPrint("WiFi setup: connect failed, staying on AP");
+    WiFi.mode(WIFI_AP);   // drop the failed STA attempt, keep only the AP
+    snprintf(buf, sizeof(buf), "{\"ok\":false,\"error\":\"connect failed or timed out\"}");
+    bleSetStatus("error: connect failed");
+  }
+
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", buf);
+}
+
 // ====== Dashboard page ======
 static const char PAGE_DASH[] PROGMEM = R"HTML(<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -622,6 +725,7 @@ dialog pre{font:13px/1.6 var(--mono);white-space:pre-wrap;margin:0 0 16px}
 <button class="btn" id="stats" type="button">Reset stats</button>
 <button class="btn danger" id="reset" type="button">Reset PMD2</button>
 <a class="btn" href="/console">Console</a>
+<a class="btn" href="/setup">WiFi setup</a>
 </footer>
 
 <dialog id="dlg"><pre id="infotxt"></pre><form method="dialog"><button class="btn pri">Close</button></form></dialog>
@@ -922,6 +1026,7 @@ void setup() {
     WiFi.mode(WIFI_AP);
     WiFi.softAP(AP_SSID, AP_PASS);
     dualPrint("WiFi failed. Started AP \"" + String(AP_SSID) + "\", IP: " + WiFi.softAPIP().toString());
+    dualPrint("Visit http://" + WiFi.softAPIP().toString() + "/setup to configure WiFi.");
   }
 
   startProvisioningBle();
@@ -934,6 +1039,8 @@ void setup() {
 
   // Web server routes
   server.on("/", HTTP_GET, handleDashboard);
+  server.on("/setup", HTTP_GET, handleSetupPage);
+  server.on("/api/wifi-setup", HTTP_POST, handleApiWifiSetup);
   server.on("/api/sensor", HTTP_GET, handleApiSensor);
   server.on("/api/history", HTTP_GET, handleApiHistory);
   server.on("/api/csv", HTTP_GET, handleApiCsv);
