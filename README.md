@@ -1,20 +1,27 @@
 # PMD2 XIAO ESP32C6 SPI Command Tester
 
-This Arduino sketch matches the PMD2 SPI3 slave implementation in
+These Arduino sketches match the PMD2 SPI3 slave implementation in
 `Core/Src/spi_slave.c`.
 
 ## Status
 
-This repo currently contains just the single Arduino sketch
-(`PMD2_XIAO_ESP32C6_SPI_Master/PMD2_XIAO_ESP32C6_SPI_Master.ino`), originally
-copied as-is from the `pmd2x` branch of
-[ElmorLabs/PMD2-FW](https://github.com/ElmorLabs/PMD2-FW/tree/pmd2x)
-(`Arduino/PMD2_XIAO_ESP32C6_SPI_Master/`). It is the starting point for
-further development; the PMD2 STM32 firmware itself (the SPI3 slave side)
-lives in the upstream PMD2-FW repo, not here.
+This repo contains two Arduino sketches, each in its own folder (Arduino
+requires a sketch's folder name to match its `.ino` filename):
 
-CI compiles the sketch on every push/PR (see `.github/workflows/ci.yml`); no
-release workflow or additional sketches have been added.
+- `PMD2_XIAO_ESP32C6_SPI_Master/` - the original serial-only command tester,
+  copied as-is from the `pmd2x` branch of
+  [ElmorLabs/PMD2-FW](https://github.com/ElmorLabs/PMD2-FW/tree/pmd2x)
+  (`Arduino/PMD2_XIAO_ESP32C6_SPI_Master/`).
+- `PMD2_XIAO_ESP32C6_Dashboard/` - a web dashboard build: same SPI command
+  set, plus a live-updating telemetry page (power/temperature chart, CSV
+  export, device info, reset), a JSON API, mDNS (`http://pmd2.local`), and
+  a fallback access point if WiFi connect fails.
+
+The PMD2 STM32 firmware itself (the SPI3 slave side) lives in the upstream
+PMD2-FW repo, not here.
+
+CI compiles both sketches on every push/PR (see `.github/workflows/ci.yml`);
+no release workflow has been added.
 
 ## Wiring
 
@@ -47,10 +54,11 @@ Supported commands in firmware (`pmd2.h`):
 
 1. Install ESP32 board support in Arduino IDE.
 2. Select **Seeed XIAO ESP32C6**.
-3. In `PMD2_XIAO_ESP32C6_SPI_Master/`, copy `wifi_config.h.example` to
+3. In the sketch folder you want to build (`PMD2_XIAO_ESP32C6_SPI_Master/`
+   or `PMD2_XIAO_ESP32C6_Dashboard/`), copy `wifi_config.h.example` to
    `wifi_config.h` and fill in your WiFi SSID/password. `wifi_config.h` is
    gitignored so your credentials are never committed.
-4. Open `PMD2_XIAO_ESP32C6_SPI_Master/PMD2_XIAO_ESP32C6_SPI_Master.ino`.
+4. Open the sketch's `.ino` file.
 5. Build and upload.
 6. Open Serial Monitor at **115200 baud**.
 
