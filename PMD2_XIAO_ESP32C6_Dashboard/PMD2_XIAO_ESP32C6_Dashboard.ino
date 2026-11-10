@@ -94,7 +94,10 @@ void startProvisioningBle() {
   // response instead, so the device name is reliably visible in scanners.
   adv->enableScanResponse(true);
   adv->addServiceUUID(BLE_SERVICE_UUID);
-  adv->start();
+  const bool advStarted = adv->start();
+
+  dualPrint("BLE address: " + String(NimBLEDevice::getAddress().toString().c_str()));
+  dualPrint(String("BLE advertising start: ") + (advStarted ? "ok" : "FAILED"));
 }
 
 // Applies pending BLE-provisioned credentials: save to NVS, then reconnect
@@ -169,6 +172,8 @@ struct SensorStruct {
   uint16_t TotalPower;
   uint8_t Ocp[SENSOR_POWER_NUM];
 };
+
+static bool isSensorFramePlausible(const SensorStruct& s);
 
 struct CalibrationValueStruct {
   int16_t Offset;
