@@ -3,6 +3,17 @@
 These Arduino sketches match the PMD2 SPI3 slave implementation in
 `Core/Src/spi_slave.c`.
 
+## Product
+
+This firmware runs on a [Seeed Studio XIAO](https://www.seeedstudio.com/catalog/product/view/_ignore_category/1/id/5934/s/xiao-esp32c6/)
+board plugged into an **[ElmorLabs PMD2X](https://elmorlabs.com/product/elmorlabs-pmd2x-power-measurement-device-2x/)**
+("Power Measurement Device 2X") - a device that monitors voltage, current,
+and power across CPU (EPS), GPU (PCIe and 12VHPWR), and motherboard (ATX24)
+connectors, including per-wire measurement on the 12VHPWR connector and an
+onboard OLED display. The XIAO adds wireless (WiFi/BLE) access to those
+readings over this sketch's web dashboard, on top of the PMD2X's own
+USB/OLED interface.
+
 ## Status
 
 This repo contains two Arduino sketches, each in its own folder (Arduino
