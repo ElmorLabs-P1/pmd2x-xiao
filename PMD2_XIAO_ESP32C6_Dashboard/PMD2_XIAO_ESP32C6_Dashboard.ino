@@ -3,13 +3,16 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
+#include <DNSServer.h>
 #include <Preferences.h>
 #include <NimBLEDevice.h>
 #include "wifi_config.h"   // optional compiled-in defaults: WIFI_SSID / WIFI_PASS
 
 WebServer server(80);
+DNSServer dnsServer;
 String webOutputBuffer;
 Preferences g_prefs;
+static bool g_captivePortal = false;   // true while running the fallback AP
 
 // ====== Configuration ======
 static constexpr uint32_t SERIAL_BAUD = 115200;
@@ -628,6 +631,10 @@ void handleApiWifiSetup() {
     dualPrint("WiFi setup: connected, IP: " + ip);
     snprintf(buf, sizeof(buf), "{\"ok\":true,\"ip\":\"%s\"}", ip.c_str());
     bleSetStatus(("connected:" + ip).c_str());
+    if (g_captivePortal) {
+      g_captivePortal = false;
+      dnsServer.stop();
+    }
   } else {
     dualPrint("WiFi setup: connect failed, staying on AP");
     WiFi.mode(WIFI_AP);   // drop the failed STA attempt, keep only the AP
@@ -639,7 +646,28 @@ void handleApiWifiSetup() {
   server.send(200, "application/json", buf);
 }
 
-// ====== Dashboard page ======
+// ====== Captive portal (fallback AP only) ======
+// Phones/laptops probe a handful of well-known URLs right after joining a
+// WiFi network to decide whether it needs a "sign in" step. Answering
+// those the way a real captive portal would makes the OS pop the setup
+// page automatically instead of requiring the user to open it by hand.
+// A DNSServer answering every hostname with our own IP catches anything
+// else the OS or a browser tries to load while on this AP.
+void handleCaptivePortalRedirect() {
+  if (!g_captivePortal) {
+    server.send(404, "text/plain", "Not found");
+    return;
+  }
+  server.sendHeader("Location", "/setup", true);
+  server.send(302, "text/plain", "");
+}
+
+// Android's connectivity check expects an empty 204 response when there is
+// no captive portal; returning anything else (e.g. our redirect) is what
+// signals Android to show the "sign in to network" notification.
+void handleAndroidGenerate204() {
+  handleCaptivePortalRedirect();
+}
 static const char PAGE_DASH[] PROGMEM = R"HTML(<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PMD2 Telemetry</title>
@@ -661,7 +689,7 @@ h1{margin:0;font-size:22px}
 .two{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
 .wide{grid-column:span 2}
 @media(max-width:700px){.wide{grid-column:auto}}
-.row{display:grid;grid-template-columns:52px 1fr 1fr 1fr 46px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #222a35;font:13px var(--mono);color:#cfd6df}
+.row{display:grid;grid-template-columns:68px 1fr 1fr 1fr 46px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #222a35;font:13px var(--mono);color:#cfd6df}
 .nm{color:var(--mut)}.w{color:var(--tx)}
 .pill{font:600 11px var(--sans);border-radius:6px;padding:3px 0;text-align:center;background:#12301f;color:var(--ok)}
 .pill.trip{background:#3b1519;color:var(--bad)}
@@ -736,9 +764,14 @@ const $=id=>document.getElementById(id),HL=300;
 let hist={t:[],p:[]},lastSeq=-1,paused=false;
 $('host').textContent=location.host;
 
+// Channel -> rail name, per PMD2X_CHANNELS in pmd_pycore's sensor_translation.py
+// (matches SENSOR_POWER_* in the PMD2-FW pmd2.h header). Channel 4 ("HPWR")
+// is computed by the firmware from the six 12VHPWR wire channels (10-15).
+const CHANNEL_NAMES=['12V','5V','5VSB','3.3V','HPWR','EPS1','EPS2','PCIE1','PCIE2','PCIE3',
+  'HPWR_W1','HPWR_W2','HPWR_W3','HPWR_W4','HPWR_W5','HPWR_W6'];
 let h1='',h2='';
 for(let i=0;i<16;i++){
-  const r='<div class="row"><span class="nm">CH '+String(i+1).padStart(2,'0')+'</span><span id="v'+i+'">--</span><span id="a'+i+'">--</span><span class="w" id="w'+i+'">--</span><span class="pill" id="o'+i+'">--</span></div>';
+  const r='<div class="row"><span class="nm">'+CHANNEL_NAMES[i]+'</span><span id="v'+i+'">--</span><span id="a'+i+'">--</span><span class="w" id="w'+i+'">--</span><span class="pill" id="o'+i+'">--</span></div>';
   if(i<8)h1+=r;else h2+=r;
 }
 $('c1').innerHTML=h1;$('c2').innerHTML=h2;
@@ -1026,7 +1059,11 @@ void setup() {
     WiFi.mode(WIFI_AP);
     WiFi.softAP(AP_SSID, AP_PASS);
     dualPrint("WiFi failed. Started AP \"" + String(AP_SSID) + "\", IP: " + WiFi.softAPIP().toString());
-    dualPrint("Visit http://" + WiFi.softAPIP().toString() + "/setup to configure WiFi.");
+
+    g_captivePortal = true;
+    dnsServer.start(53, "*", WiFi.softAPIP());
+    dualPrint("Captive portal: joining \"" + String(AP_SSID) +
+              "\" should prompt to set up WiFi automatically.");
   }
 
   startProvisioningBle();
@@ -1049,6 +1086,18 @@ void setup() {
   server.on("/console", HTTP_GET, handleConsole);
   server.on("/cmd", HTTP_POST, handleCmd);
   server.on("/log", HTTP_GET, handleLog);
+
+  // Captive portal detection probes (only matter while on the fallback AP;
+  // harmless to register unconditionally since they're never hit once on
+  // a real LAN and DNS is no longer redirecting everything here).
+  server.on("/generate_204", HTTP_GET, handleAndroidGenerate204);        // Android
+  server.on("/gen_204", HTTP_GET, handleAndroidGenerate204);             // Android (older)
+  server.on("/hotspot-detect.html", HTTP_GET, handleCaptivePortalRedirect); // Apple
+  server.on("/library/test/success.html", HTTP_GET, handleCaptivePortalRedirect); // Apple
+  server.on("/ncsi.txt", HTTP_GET, handleCaptivePortalRedirect);         // Windows
+  server.on("/connecttest.txt", HTTP_GET, handleCaptivePortalRedirect);  // Windows
+  server.onNotFound(handleCaptivePortalRedirect);
+
   server.begin();
 
   resetStats();
@@ -1091,6 +1140,11 @@ void loop() {
   // BLE-provisioned WiFi credentials, applied outside the BLE callback
   if (g_bleApplyRequested) {
     applyPendingWifiCredentials();
+  }
+
+  // Captive portal DNS redirect (fallback AP only)
+  if (g_captivePortal) {
+    dnsServer.processNextRequest();
   }
 
   // Web server
