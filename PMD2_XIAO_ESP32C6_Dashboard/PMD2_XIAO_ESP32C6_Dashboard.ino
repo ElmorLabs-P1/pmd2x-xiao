@@ -547,17 +547,17 @@ static const char PAGE_SETUP[] PROGMEM = R"HTML(<!DOCTYPE html><html lang="en"><
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PMD2 WiFi Setup</title>
 <style>
-body{margin:0;background:#f5f6f8;color:#15181d;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{margin:0;background:#121212;color:#ffffff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:420px;margin:40px auto;padding:0 16px}
-h1{font-size:20px;color:#0c1524}
-p.hint{color:#6b7280;font-size:14px}
-label{display:block;margin:16px 0 6px;font-size:13px;color:#6b7280}
-input{width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1px solid #e2e5ea;background:#fff;color:#15181d;font-size:16px}
+h1{font-size:20px;color:#ffffff}
+p.hint{color:#9a9a9a;font-size:14px}
+label{display:block;margin:16px 0 6px;font-size:13px;color:#9a9a9a}
+input{width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1px solid #333333;background:#1a1a1a;color:#ffffff;font-size:16px}
 button{margin-top:20px;width:100%;padding:12px;border-radius:10px;border:none;background:#ff6a00;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
 #msg{margin-top:16px;font-size:14px}
-#msg.err{color:#d1393c}#msg.ok{color:#1f9d55}
+#msg.err{color:#ff5a52}#msg.ok{color:#3ddc84}
 </style></head><body><main>
-<p><a href="/" style="color:#6b7280;text-decoration:none">&larr; Dashboard</a></p>
+<p><a href="/" style="color:#9a9a9a;text-decoration:none">&larr; Dashboard</a></p>
 <h1>Connect PMD2 to your WiFi</h1>
 <p class="hint">Enter your home/office WiFi network. The device will save
 this and try to connect; it stays reachable at this address
@@ -672,7 +672,7 @@ static const char PAGE_DASH[] PROGMEM = R"HTML(<!DOCTYPE html><html lang="en"><h
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PMD2 Telemetry</title>
 <style>
-:root{--bg:#f5f6f8;--card:#ffffff;--line:#e2e5ea;--tx:#15181d;--mut:#6b7280;--acc:#ff6a00;--navy:#0c1524;--ok:#1f9d55;--bad:#d1393c;
+:root{--bg:#121212;--card:#1a1a1a;--line:#333333;--tx:#ffffff;--mut:#9a9a9a;--acc:#ff6a00;--navy:#ffffff;--ok:#3ddc84;--bad:#ff5a52;
 --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);font-family:var(--sans)}
@@ -680,7 +680,7 @@ main{max-width:1200px;margin:0 auto;padding:24px 16px 40px;display:flex;flex-dir
 header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
 h1{margin:0;font-size:22px;color:var(--navy)}
 .host{font:13px var(--mono);color:var(--mut);margin-left:12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;min-width:0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;min-width:0}
 .lbl{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0 0 8px}
 .big{font:600 36px var(--mono);margin:0;color:var(--navy)}
 .u{font-size:15px;color:var(--mut);margin-left:6px}
@@ -691,22 +691,22 @@ h1{margin:0;font-size:22px;color:var(--navy)}
 @media(max-width:700px){.wide{grid-column:auto}}
 .row{display:grid;grid-template-columns:68px 1fr 1fr 1fr 46px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font:13px var(--mono);color:var(--tx)}
 .nm{color:var(--mut)}.w{color:var(--tx)}
-.pill{font:600 11px var(--sans);border-radius:6px;padding:3px 0;text-align:center;background:#e4f5ea;color:var(--ok)}
-.pill.trip{background:#fbe4e4;color:var(--bad)}
+.pill{font:600 11px var(--sans);border-radius:6px;padding:3px 0;text-align:center;background:#163a28;color:var(--ok)}
+.pill.trip{background:#3a1816;color:var(--bad)}
 .btn{font:500 14px var(--sans);min-height:44px;padding:0 18px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--navy);cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
 .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
-.btn.danger{border-color:#f0b9ba;color:var(--bad)}
+.btn.danger{border-color:#5a2a26;color:var(--bad)}
 .bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
 .bar>div{height:100%;background:var(--acc);width:0}
 .rail{display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px}
 .rail b{font:500 14px var(--mono)}
 .live{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut)}
-.live i{width:8px;height:8px;border-radius:50%;background:#b7bcc4}
+.live i{width:8px;height:8px;border-radius:50%;background:#5b5b5b}
 .live.on{color:var(--ok)}.live.on i{background:var(--ok)}
 .legend{display:flex;gap:20px;font-size:13px;color:var(--mut);margin-top:8px}
-#nodata{background:#fbe4e4;border:1px solid #f0b9ba;color:var(--bad);border-radius:10px;padding:12px 16px;font-size:14px}
+#nodata{background:#3a1816;border:1px solid #5a2a26;color:var(--bad);border-radius:10px;padding:12px 16px;font-size:14px}
 dialog{background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:12px;max-width:520px;width:calc(100% - 32px)}
-dialog::backdrop{background:rgba(15,23,42,.5)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
 dialog pre{font:13px/1.6 var(--mono);white-space:pre-wrap;margin:0 0 16px}
 [hidden]{display:none!important}
 .pinbars{display:flex;align-items:flex-end;gap:10px;height:140px;padding:8px 4px 0}
@@ -738,7 +738,7 @@ dialog pre{font:13px/1.6 var(--mono);white-space:pre-wrap;margin:0 0 16px}
 <div class="card wide">
 <p class="lbl">Power, last 5 minutes</p>
 <svg id="chart" viewBox="0 0 640 200" style="width:100%;height:auto;display:block" role="img" aria-label="Line chart of total and PCIe power over the last five minutes"></svg>
-<div class="legend"><span><span style="color:var(--acc)">&#9473;</span> Total</span><span><span style="color:#0c1524">&#9473;</span> PCIe</span></div>
+<div class="legend"><span><span style="color:var(--acc)">&#9473;</span> Total</span><span><span style="color:#9a9a9a">&#9473;</span> PCIe</span></div>
 </div>
 <div class="card" style="display:flex;flex-direction:column;gap:18px">
 <p class="lbl" style="margin:0">Rails</p>
@@ -795,13 +795,13 @@ function draw(){
   let g='';
   for(let k=0;k<=3;k++){
     const y=Y0+H*k/3;
-    g+='<line x1="40" y1="'+y+'" x2="630" y2="'+y+'" stroke="#e2e5ea"/>';
-    g+='<text x="4" y="'+(y+4)+'" fill="#6b7280" font-size="11">'+Math.round(mx*(1-k/3))+(k==0?' W':'')+'</text>';
+    g+='<line x1="40" y1="'+y+'" x2="630" y2="'+y+'" stroke="#333333"/>';
+    g+='<text x="4" y="'+(y+4)+'" fill="#9a9a9a" font-size="11">'+Math.round(mx*(1-k/3))+(k==0?' W':'')+'</text>';
   }
-  g+='<text x="40" y="194" fill="#6b7280" font-size="11">-5 min</text><text x="596" y="194" fill="#6b7280" font-size="11">now</text>';
+  g+='<text x="40" y="194" fill="#9a9a9a" font-size="11">-5 min</text><text x="596" y="194" fill="#9a9a9a" font-size="11">now</text>';
   const pts=a=>a.map((v,i)=>(X0+W*((HL-n+i)/(HL-1))).toFixed(1)+','+(Y0+H*(1-v/mx)).toFixed(1)).join(' ');
   if(n>1){
-    g+='<polyline fill="none" stroke="#0c1524" stroke-width="2" points="'+pts(hist.p)+'"/>';
+    g+='<polyline fill="none" stroke="#9a9a9a" stroke-width="2" points="'+pts(hist.p)+'"/>';
     g+='<polyline fill="none" stroke="#ff6a00" stroke-width="2.5" points="'+pts(hist.t)+'"/>';
   }
   $('chart').innerHTML=g;
