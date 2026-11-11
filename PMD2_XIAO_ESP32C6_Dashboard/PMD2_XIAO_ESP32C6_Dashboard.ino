@@ -44,6 +44,23 @@ static String g_pendingSsid;
 static String g_pendingPass;
 static volatile bool g_bleApplyRequested = false;
 
+// WiFi connect, as a non-blocking state machine driven from loop(). Both
+// BLE provisioning and the web /setup form just set g_wifiConnectPending
+// (and the credentials) and return immediately - connecting here used to
+// delay(250)-loop for up to WIFI_TIMEOUT_MS inside the request/callback
+// itself, which stalled the webserver (and the AP radio, mid-request)
+// long enough that the browser's own fetch() would see the connection
+// reset and report "Request failed" before ever getting a JSON response.
+enum class WifiConnectState { Idle, Starting, Waiting };
+static WifiConnectState g_wifiConnectState = WifiConnectState::Idle;
+static bool g_wifiConnectPending = false;
+static String g_wifiConnectSsid;
+static String g_wifiConnectPass;
+static uint32_t g_wifiConnectStartMs = 0;
+static bool g_wifiConnectOk = false;
+static String g_wifiConnectResult;   // IP on success, error message on failure
+static bool g_wifiConnectDone = true;
+
 class ProvisioningCallbacks : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic* c, NimBLEConnInfo& connInfo) override {
     if (c->getUUID().equals(NimBLEUUID(BLE_CHAR_SSID_UUID))) {
@@ -103,34 +120,67 @@ void startProvisioningBle() {
   dualPrint(String("BLE advertising start: ") + (advStarted ? "ok" : "FAILED"));
 }
 
-// Applies pending BLE-provisioned credentials: save to NVS, then reconnect
-// WiFi using them. Called from loop() so it runs outside the BLE callback.
-void applyPendingWifiCredentials() {
-  g_bleApplyRequested = false;
-  if (g_pendingSsid.length() == 0) {
-    bleSetStatus("error: empty ssid");
-    return;
-  }
+// Queues a WiFi connect attempt to run from loop(); safe to call from an
+// HTTP handler or a BLE callback since it never blocks.
+void startWifiConnect(const String& ssid, const String& pass) {
+  g_wifiConnectSsid = ssid;
+  g_wifiConnectPass = pass;
+  g_wifiConnectPending = true;
+  g_wifiConnectDone = false;
+}
 
-  g_prefs.putString("ssid", g_pendingSsid);
-  g_prefs.putString("pass", g_pendingPass);
-  bleSetStatus("connecting");
+// Drives the WiFi connect state machine. Call every loop() iteration;
+// each state only does non-blocking work (no delay()), so the webserver,
+// BLE, and the AP radio all keep running throughout the attempt.
+void tickWifiConnect() {
+  switch (g_wifiConnectState) {
+    case WifiConnectState::Idle:
+      if (!g_wifiConnectPending) return;
+      g_wifiConnectPending = false;
 
-  WiFi.disconnect();
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(g_pendingSsid.c_str(), g_pendingPass.c_str());
+      if (g_wifiConnectSsid.length() == 0) {
+        g_wifiConnectOk = false;
+        g_wifiConnectResult = "empty ssid";
+        g_wifiConnectDone = true;
+        bleSetStatus("error: empty ssid");
+        return;
+      }
 
-  const uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && (millis() - t0) < WIFI_TIMEOUT_MS) {
-    delay(250);
-  }
+      g_prefs.putString("ssid", g_wifiConnectSsid);
+      g_prefs.putString("pass", g_wifiConnectPass);
+      bleSetStatus("connecting");
 
-  if (WiFi.status() == WL_CONNECTED) {
-    dualPrint("BLE provisioning: WiFi connected, IP: " + WiFi.localIP().toString());
-    bleSetStatus(("connected:" + WiFi.localIP().toString()).c_str());
-  } else {
-    dualPrint("BLE provisioning: WiFi connect failed, staying on AP");
-    bleSetStatus("error: connect failed");
+      WiFi.mode(g_captivePortal ? WIFI_AP_STA : WIFI_STA);
+      WiFi.begin(g_wifiConnectSsid.c_str(), g_wifiConnectPass.c_str());
+      g_wifiConnectStartMs = millis();
+      g_wifiConnectState = WifiConnectState::Waiting;
+      return;
+
+    case WifiConnectState::Waiting:
+      if (WiFi.status() == WL_CONNECTED) {
+        const String ip = WiFi.localIP().toString();
+        dualPrint("WiFi connect: connected, IP: " + ip);
+        g_wifiConnectOk = true;
+        g_wifiConnectResult = ip;
+        g_wifiConnectDone = true;
+        bleSetStatus(("connected:" + ip).c_str());
+        if (g_captivePortal) {
+          g_captivePortal = false;
+          dnsServer.stop();
+        }
+        g_wifiConnectState = WifiConnectState::Idle;
+        return;
+      }
+      if (millis() - g_wifiConnectStartMs >= WIFI_TIMEOUT_MS) {
+        dualPrint("WiFi connect: failed or timed out, staying on AP");
+        g_wifiConnectOk = false;
+        g_wifiConnectResult = "connect failed or timed out";
+        g_wifiConnectDone = true;
+        bleSetStatus("error: connect failed");
+        if (g_captivePortal) WiFi.mode(WIFI_AP);   // drop the failed STA attempt
+        g_wifiConnectState = WifiConnectState::Idle;
+      }
+      return;
   }
 }
 
@@ -575,6 +625,31 @@ this and try to connect; it stays reachable at this address
 <div id="msg"></div>
 <script>
 document.getElementById('apip').textContent = location.host;
+
+async function pollWifiStatus(msg) {
+  for (let i = 0; i < 40; i++) {           // ~20s at 500ms, over WIFI_TIMEOUT_MS
+    await new Promise(r => setTimeout(r, 500));
+    try {
+      const r = await fetch('/api/wifi-status', {cache: 'no-store'});
+      const d = await r.json();
+      if (d.pending) continue;
+      if (d.ok) {
+        msg.className = 'ok';
+        msg.textContent = 'Connected! IP: ' + d.ip + '. Visit that address on your normal WiFi to reopen the dashboard.';
+      } else {
+        msg.className = 'err';
+        msg.textContent = 'Could not connect: ' + (d.error || 'unknown error') + '. Still on this AP, try again.';
+      }
+      return;
+    } catch (e) {
+      // AP radio can blip during the connect attempt; keep polling rather
+      // than giving up on the first dropped request.
+    }
+  }
+  msg.className = 'err';
+  msg.textContent = 'No response from the device. Still on this AP, try again.';
+}
+
 document.getElementById('go').onclick = async () => {
   const ssid = document.getElementById('s').value;
   const pass = document.getElementById('p').value;
@@ -588,13 +663,12 @@ document.getElementById('go').onclick = async () => {
       body: 'ssid=' + encodeURIComponent(ssid) + '&pass=' + encodeURIComponent(pass)
     });
     const d = await r.json();
-    if (d.ok) {
-      msg.className = 'ok';
-      msg.textContent = 'Connected! IP: ' + d.ip + '. Visit that address on your normal WiFi to reopen the dashboard.';
-    } else {
+    if (!d.ok) {
       msg.className = 'err';
-      msg.textContent = 'Could not connect: ' + (d.error || 'unknown error') + '. Still on this AP, try again.';
+      msg.textContent = 'Could not start: ' + (d.error || 'unknown error');
+      return;
     }
+    await pollWifiStatus(msg);
   } catch (e) {
     msg.className = 'err';
     msg.textContent = 'Request failed. Still on this AP, try again.';
@@ -610,6 +684,13 @@ void handleSetupPage() {
 // Saves SSID/password from the setup form, then tries to join that network
 // without ever dropping the AP - callers stay connected to "PMD2-Dashboard"
 // so they can see the result and retry from the same page on failure.
+// Kicks off a WiFi connect attempt and returns immediately - actually
+// connecting (up to WIFI_TIMEOUT_MS) happens later from loop() via
+// tickWifiConnect(). The old version blocked here with delay(250) for up
+// to 15s, which stalled the webserver (and briefly the AP radio, via the
+// WIFI_AP_STA mode switch) long enough that the browser's fetch() would
+// see the TCP connection reset and report "Request failed" before ever
+// getting a response - the client has to poll /api/wifi-status instead.
 void handleApiWifiSetup() {
   const String ssid = server.arg("ssid");
   const String pass = server.arg("pass");
@@ -619,34 +700,23 @@ void handleApiWifiSetup() {
     return;
   }
 
-  g_prefs.putString("ssid", ssid);
-  g_prefs.putString("pass", pass);
+  startWifiConnect(ssid, pass);
 
-  WiFi.mode(WIFI_AP_STA);
-  WiFi.begin(ssid.c_str(), pass.c_str());
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", "{\"ok\":true,\"pending\":true}");
+}
 
-  const uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && (millis() - t0) < WIFI_TIMEOUT_MS) {
-    delay(250);
-  }
-
-  char buf[160];
-  if (WiFi.status() == WL_CONNECTED) {
-    const String ip = WiFi.localIP().toString();
-    dualPrint("WiFi setup: connected, IP: " + ip);
-    snprintf(buf, sizeof(buf), "{\"ok\":true,\"ip\":\"%s\"}", ip.c_str());
-    bleSetStatus(("connected:" + ip).c_str());
-    if (g_captivePortal) {
-      g_captivePortal = false;
-      dnsServer.stop();
-    }
+void handleApiWifiStatus() {
+  char buf[200];
+  if (!g_wifiConnectDone) {
+    snprintf(buf, sizeof(buf), "{\"pending\":true}");
+  } else if (g_wifiConnectOk) {
+    snprintf(buf, sizeof(buf), "{\"pending\":false,\"ok\":true,\"ip\":\"%s\"}",
+             g_wifiConnectResult.c_str());
   } else {
-    dualPrint("WiFi setup: connect failed, staying on AP");
-    WiFi.mode(WIFI_AP);   // drop the failed STA attempt, keep only the AP
-    snprintf(buf, sizeof(buf), "{\"ok\":false,\"error\":\"connect failed or timed out\"}");
-    bleSetStatus("error: connect failed");
+    snprintf(buf, sizeof(buf), "{\"pending\":false,\"ok\":false,\"error\":\"%s\"}",
+             g_wifiConnectResult.c_str());
   }
-
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", buf);
 }
@@ -1111,6 +1181,7 @@ void setup() {
   server.on("/", HTTP_GET, handleDashboard);
   server.on("/setup", HTTP_GET, handleSetupPage);
   server.on("/api/wifi-setup", HTTP_POST, handleApiWifiSetup);
+  server.on("/api/wifi-status", HTTP_GET, handleApiWifiStatus);
   server.on("/api/sensor", HTTP_GET, handleApiSensor);
   server.on("/api/history", HTTP_GET, handleApiHistory);
   server.on("/api/csv", HTTP_GET, handleApiCsv);
@@ -1172,10 +1243,12 @@ void loop() {
     }
   }
 
-  // BLE-provisioned WiFi credentials, applied outside the BLE callback
+  // BLE-provisioned WiFi credentials, queued outside the BLE callback
   if (g_bleApplyRequested) {
-    applyPendingWifiCredentials();
+    g_bleApplyRequested = false;
+    startWifiConnect(g_pendingSsid, g_pendingPass);
   }
+  tickWifiConnect();
 
   // Captive portal DNS redirect (fallback AP only)
   if (g_captivePortal) {
