@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -58,7 +58,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
 
           mkdir -p site/spi-master site/dashboard
-          cp docs/index.html site/index.html
+          sed "s/__VERSION__/${VERSION}/g" docs/index.html > site/index.html
 
           cp PMD2_XIAO_ESP32C6_SPI_Master/build/esp32.esp32.XIAO_ESP32C6/PMD2_XIAO_ESP32C6_SPI_Master.ino.merged.bin \
             site/spi-master/firmware.bin
@@ -96,6 +96,15 @@ jobs:
         with:
           path: site
 
+      - name: Upload firmware binaries for release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-binaries
+          path: |
+            site/spi-master/firmware.bin
+            site/dashboard/firmware.bin
+          retention-days: 1
+
   deploy:
     needs: build
     runs-on: ubuntu-24.04
@@ -106,3 +115,30 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download firmware binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-binaries
+          path: binaries
+
+      - name: Rename binaries for the release
+        run: |
+          mv binaries/spi-master/firmware.bin spi-master-firmware.bin
+          mv binaries/dashboard/firmware.bin dashboard-firmware.bin
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            spi-master-firmware.bin \
+            dashboard-firmware.bin \
+            --title "${{ github.ref_name }}" \
+            --generate-notes

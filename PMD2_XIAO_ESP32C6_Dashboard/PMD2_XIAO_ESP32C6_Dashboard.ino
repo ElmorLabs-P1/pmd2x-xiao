@@ -15,6 +15,8 @@ Preferences g_prefs;
 static bool g_captivePortal = false;   // true while running the fallback AP
 
 // ====== Configuration ======
+// Bump this alongside the git tag for each release (see .github/workflows/release.yml).
+static const char* FW_VERSION = "1.0.2";
 static constexpr uint32_t SERIAL_BAUD = 115200;
 static constexpr uint32_t SPI_CLOCK_HZ = 1000000;
 static constexpr uint8_t PMD2_CS_PIN = 17;
@@ -60,6 +62,16 @@ static uint32_t g_wifiConnectStartMs = 0;
 static bool g_wifiConnectOk = false;
 static String g_wifiConnectResult;   // IP on success, error message on failure
 static bool g_wifiConnectDone = true;
+
+// WiFi scan, as a non-blocking state machine driven from loop(), same
+// rationale as the connect state machine above: WiFi.scanNetworks()
+// without the async=true argument blocks for seconds, which would stall
+// the webserver the same way the old blocking connect code did.
+enum class WifiScanState { Idle, Starting, Waiting };
+static WifiScanState g_wifiScanState = WifiScanState::Idle;
+static bool g_wifiScanPending = false;
+static bool g_wifiScanDone = true;
+static String g_wifiScanResult;   // JSON array of {ssid, rssi}, built once scan completes
 
 class ProvisioningCallbacks : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic* c, NimBLEConnInfo& connInfo) override {
@@ -181,6 +193,66 @@ void tickWifiConnect() {
         g_wifiConnectState = WifiConnectState::Idle;
       }
       return;
+  }
+}
+
+// Queues a WiFi scan to run from loop(); safe to call from an HTTP handler
+// since it never blocks. Ignored if a scan is already pending/running.
+void startWifiScan() {
+  if (!g_wifiScanDone) return;
+  g_wifiScanPending = true;
+  g_wifiScanDone = false;
+}
+
+// Drives the WiFi scan state machine. Call every loop() iteration.
+void tickWifiScan() {
+  switch (g_wifiScanState) {
+    case WifiScanState::Idle:
+      if (!g_wifiScanPending) return;
+      g_wifiScanPending = false;
+      WiFi.scanDelete();
+      WiFi.scanNetworks(/*async=*/true);
+      g_wifiScanState = WifiScanState::Waiting;
+      return;
+
+    case WifiScanState::Waiting: {
+      const int16_t n = WiFi.scanComplete();
+      if (n == WIFI_SCAN_RUNNING) return;
+
+      String json = "[";
+      if (n > 0) {
+        // Strongest signal first, de-duplicated by SSID (APs with multiple
+        // bands/radios show up as separate scan results otherwise).
+        for (int16_t i = 0; i < n; i++) {
+          const String ssid = WiFi.SSID(i);
+          if (ssid.length() == 0) continue;   // hidden network, nothing to show
+
+          bool seen = false;
+          for (int16_t j = 0; j < i; j++) {
+            if (WiFi.SSID(j) == ssid) { seen = true; break; }
+          }
+          if (seen) continue;
+
+          if (json.length() > 1) json += ",";
+          json += "{\"ssid\":\"";
+          for (size_t k = 0; k < ssid.length(); k++) {
+            const char c = ssid[k];
+            if (c == '"' || c == '\\') json += '\\';
+            json += c;
+          }
+          json += "\",\"rssi\":" + String(WiFi.RSSI(i));
+          json += ",\"secure\":" + String(WiFi.encryptionType(i) != WIFI_AUTH_OPEN ? "true" : "false");
+          json += "}";
+        }
+      }
+      json += "]";
+
+      WiFi.scanDelete();
+      g_wifiScanResult = json;
+      g_wifiScanDone = true;
+      g_wifiScanState = WifiScanState::Idle;
+      return;
+    }
   }
 }
 
@@ -607,24 +679,75 @@ main{max-width:420px;margin:40px auto;padding:0 16px}
 h1{font-size:20px;color:#ffffff}
 p.hint{color:#9a9a9a;font-size:14px}
 label{display:block;margin:16px 0 6px;font-size:13px;color:#9a9a9a}
-input{width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1px solid #333333;background:#1a1a1a;color:#ffffff;font-size:16px}
+input,select{width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1px solid #333333;background:#1a1a1a;color:#ffffff;font-size:16px}
 button{margin-top:20px;width:100%;padding:12px;border-radius:10px;border:none;background:#ff6a00;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+button.secondary{margin-top:8px;background:#2a2a2a;color:#9a9a9a;font-weight:400}
+a.link{color:#ff9a4d;font-size:13px;text-decoration:none;display:inline-block;margin-top:8px}
 #msg{margin-top:16px;font-size:14px}
 #msg.err{color:#ff5a52}#msg.ok{color:#3ddc84}
 </style></head><body><main>
 <p><a href="/" style="color:#9a9a9a;text-decoration:none">&larr; Dashboard</a></p>
 <h1>Connect PMD2 to your WiFi</h1>
-<p class="hint">Enter your home/office WiFi network. The device will save
+<p class="hint">Pick your home/office WiFi network. The device will save
 this and try to connect; it stays reachable at this address
 (<span id="apip"></span>) until it succeeds.</p>
 <label for="s">Network name (SSID)</label>
-<input id="s" autocapitalize="off" autocorrect="off">
+<select id="s"><option value="">Scanning...</option></select>
+<input id="smanual" style="display:none" autocapitalize="off" autocorrect="off" placeholder="SSID">
+<a href="#" class="link" id="rescan">Rescan</a> &middot;
+<a href="#" class="link" id="togglemanual">Enter manually</a>
 <label for="p">Password</label>
 <input id="p" type="password">
 <button id="go">Connect</button>
 <div id="msg"></div>
 <script>
 document.getElementById('apip').textContent = location.host;
+
+const sSelect = document.getElementById('s');
+const sManual = document.getElementById('smanual');
+const toggleManual = document.getElementById('togglemanual');
+let manualMode = false;
+
+function setManualMode(on) {
+  manualMode = on;
+  sSelect.style.display = on ? 'none' : '';
+  sManual.style.display = on ? '' : 'none';
+  toggleManual.textContent = on ? 'Pick from list' : 'Enter manually';
+}
+
+toggleManual.onclick = (e) => { e.preventDefault(); setManualMode(!manualMode); };
+
+async function scanNetworks() {
+  sSelect.innerHTML = '<option value="">Scanning...</option>';
+  try {
+    await fetch('/api/wifi-scan', {method: 'POST'});
+    for (let i = 0; i < 20; i++) {       // up to ~10s for the scan to finish
+      await new Promise(r => setTimeout(r, 500));
+      const r = await fetch('/api/wifi-scan-status', {cache: 'no-store'});
+      const d = await r.json();
+      if (d.pending) continue;
+      sSelect.innerHTML = '';
+      if (!d.networks || d.networks.length === 0) {
+        sSelect.innerHTML = '<option value="">No networks found</option>';
+        setManualMode(true);
+        return;
+      }
+      for (const net of d.networks) {
+        const opt = document.createElement('option');
+        opt.value = net.ssid;
+        opt.textContent = net.ssid + (net.secure ? '' : ' (open)');
+        sSelect.appendChild(opt);
+      }
+      return;
+    }
+    sSelect.innerHTML = '<option value="">Scan timed out</option>';
+  } catch (e) {
+    sSelect.innerHTML = '<option value="">Scan failed</option>';
+  }
+}
+
+document.getElementById('rescan').onclick = (e) => { e.preventDefault(); scanNetworks(); };
+scanNetworks();
 
 async function pollWifiStatus(msg) {
   for (let i = 0; i < 40; i++) {           // ~20s at 500ms, over WIFI_TIMEOUT_MS
@@ -651,7 +774,7 @@ async function pollWifiStatus(msg) {
 }
 
 document.getElementById('go').onclick = async () => {
-  const ssid = document.getElementById('s').value;
+  const ssid = manualMode ? sManual.value : sSelect.value;
   const pass = document.getElementById('p').value;
   const msg = document.getElementById('msg');
   msg.className = '';
@@ -707,18 +830,36 @@ void handleApiWifiSetup() {
 }
 
 void handleApiWifiStatus() {
-  char buf[200];
+  char buf[240];
   if (!g_wifiConnectDone) {
-    snprintf(buf, sizeof(buf), "{\"pending\":true}");
+    snprintf(buf, sizeof(buf), "{\"pending\":true,\"fw\":\"%s\"}", FW_VERSION);
   } else if (g_wifiConnectOk) {
-    snprintf(buf, sizeof(buf), "{\"pending\":false,\"ok\":true,\"ip\":\"%s\"}",
-             g_wifiConnectResult.c_str());
+    snprintf(buf, sizeof(buf), "{\"pending\":false,\"ok\":true,\"ip\":\"%s\",\"fw\":\"%s\"}",
+             g_wifiConnectResult.c_str(), FW_VERSION);
   } else {
-    snprintf(buf, sizeof(buf), "{\"pending\":false,\"ok\":false,\"error\":\"%s\"}",
-             g_wifiConnectResult.c_str());
+    snprintf(buf, sizeof(buf), "{\"pending\":false,\"ok\":false,\"error\":\"%s\",\"fw\":\"%s\"}",
+             g_wifiConnectResult.c_str(), FW_VERSION);
   }
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", buf);
+}
+
+// Kicks off a WiFi scan and returns immediately; the setup page polls
+// /api/wifi-scan-status for the results once scanning finishes.
+void handleApiWifiScan() {
+  startWifiScan();
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", "{\"ok\":true,\"pending\":true}");
+}
+
+void handleApiWifiScanStatus() {
+  server.sendHeader("Cache-Control", "no-store");
+  if (!g_wifiScanDone) {
+    server.send(200, "application/json", "{\"pending\":true}");
+    return;
+  }
+  server.send(200, "application/json",
+              "{\"pending\":false,\"networks\":" + g_wifiScanResult + "}");
 }
 
 // ====== Captive portal (fallback AP only) ======
@@ -1130,7 +1271,7 @@ void setup() {
   digitalWrite(PMD2_CS_PIN, HIGH);
   SPI.begin();
 
-  dualPrint("PMD2 SPI command tester starting...");
+  dualPrint("PMD2 SPI command tester starting... (firmware " + String(FW_VERSION) + ")");
   dualPrint("CS pin: GPIO" + String(PMD2_CS_PIN) + ", SPI mode: 0, clock: " + String(SPI_CLOCK_HZ) + " Hz");
 
   printHelp();
@@ -1182,6 +1323,8 @@ void setup() {
   server.on("/setup", HTTP_GET, handleSetupPage);
   server.on("/api/wifi-setup", HTTP_POST, handleApiWifiSetup);
   server.on("/api/wifi-status", HTTP_GET, handleApiWifiStatus);
+  server.on("/api/wifi-scan", HTTP_POST, handleApiWifiScan);
+  server.on("/api/wifi-scan-status", HTTP_GET, handleApiWifiScanStatus);
   server.on("/api/sensor", HTTP_GET, handleApiSensor);
   server.on("/api/history", HTTP_GET, handleApiHistory);
   server.on("/api/csv", HTTP_GET, handleApiCsv);
@@ -1249,6 +1392,7 @@ void loop() {
     startWifiConnect(g_pendingSsid, g_pendingPass);
   }
   tickWifiConnect();
+  tickWifiScan();
 
   // Captive portal DNS redirect (fallback AP only)
   if (g_captivePortal) {
