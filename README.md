@@ -71,14 +71,15 @@ Supported commands in firmware (`pmd2.h`):
    **"No OTA (2MB APP/2MB SPIFFS)"** - WiFi + WebServer + BLE together
    don't fit in the default 1.2MB app partition. Not needed for
    `PMD2_XIAO_ESP32C6_SPI_Master/`.
-4. In the sketch folder you want to build, copy `wifi_config.h.example` to
-   `wifi_config.h`. `wifi_config.h` is gitignored so your credentials are
-   never committed.
-   - `PMD2_XIAO_ESP32C6_SPI_Master/`: fill in your real WiFi SSID/password,
-     they're required at boot.
-   - `PMD2_XIAO_ESP32C6_Dashboard/`: these are optional first-boot defaults
-     only - leave them blank and provision WiFi over BLE instead (see
-     below).
+4. Set up WiFi credentials for the sketch you're building:
+   - `PMD2_XIAO_ESP32C6_SPI_Master/`: edit the `WIFI_SSID`/`WIFI_PASS`
+     constants near the top of the `.ino` directly with your real
+     credentials - they're required at boot, and (matching upstream)
+     aren't gitignored, so don't commit your real values.
+   - `PMD2_XIAO_ESP32C6_Dashboard/`: copy `wifi_config.h.example` to
+     `wifi_config.h` (gitignored, so your credentials are never
+     committed). These are optional first-boot defaults only - leave them
+     blank and provision WiFi over BLE instead (see below).
 5. Open the sketch's `.ino` file.
 6. Build and upload.
 7. Open Serial Monitor at **115200 baud**.

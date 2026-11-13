@@ -1,7 +1,0 @@
-#pragma once
-
-// Copy this file to wifi_config.h (which is gitignored) and fill in your
-// real WiFi credentials. wifi_config.h is included by the .ino sketch.
-
-const char* WIFI_SSID = "your-ssid";
-const char* WIFI_PASS = "your-password";

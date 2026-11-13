@@ -15,7 +15,6 @@ jobs:
 
       - name: Create wifi_config.h from example
         run: |
-          cp PMD2_XIAO_ESP32C6_SPI_Master/wifi_config.h.example PMD2_XIAO_ESP32C6_SPI_Master/wifi_config.h
           cp PMD2_XIAO_ESP32C6_Dashboard/wifi_config.h.example PMD2_XIAO_ESP32C6_Dashboard/wifi_config.h
 
       - name: Compile SPI_Master sketch for Seeed XIAO ESP32C6
