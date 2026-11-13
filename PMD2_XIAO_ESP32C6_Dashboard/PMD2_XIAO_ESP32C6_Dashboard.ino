@@ -16,7 +16,7 @@ static bool g_captivePortal = false;   // true while running the fallback AP
 
 // ====== Configuration ======
 // Bump this alongside the git tag for each release (see .github/workflows/release.yml).
-static const char* FW_VERSION = "1.0.4";
+static const char* FW_VERSION = "1.0.5";
 static constexpr uint32_t SERIAL_BAUD = 115200;
 static constexpr uint32_t SPI_CLOCK_HZ = 1000000;
 static constexpr uint8_t PMD2_CS_PIN = 17;
