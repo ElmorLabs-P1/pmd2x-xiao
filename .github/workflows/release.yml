@@ -37,13 +37,6 @@ jobs:
       - name: Install NimBLE-Arduino
         run: arduino-cli lib install "NimBLE-Arduino"
 
-      - name: Build SPI_Master firmware
-        run: |
-          arduino-cli compile \
-            --fqbn esp32:esp32:XIAO_ESP32C6 \
-            --export-binaries \
-            PMD2_XIAO_ESP32C6_SPI_Master
-
       - name: Build Dashboard firmware
         run: |
           arduino-cli compile \
@@ -56,26 +49,11 @@ jobs:
           set -eu
           VERSION="${GITHUB_REF_NAME#v}"
 
-          mkdir -p site/spi-master site/dashboard
+          mkdir -p site/dashboard
           sed "s/__VERSION__/${VERSION}/g" docs/index.html > site/index.html
 
-          cp PMD2_XIAO_ESP32C6_SPI_Master/build/esp32.esp32.XIAO_ESP32C6/PMD2_XIAO_ESP32C6_SPI_Master.ino.merged.bin \
-            site/spi-master/firmware.bin
           cp PMD2_XIAO_ESP32C6_Dashboard/build/esp32.esp32.XIAO_ESP32C6/PMD2_XIAO_ESP32C6_Dashboard.ino.merged.bin \
             site/dashboard/firmware.bin
-
-          cat > site/spi-master/manifest.json <<EOF
-          {
-            "name": "PMD2X XIAO SPI Master",
-            "version": "$VERSION",
-            "builds": [
-              {
-                "chipFamily": "ESP32-C6",
-                "parts": [{ "path": "firmware.bin", "offset": 0 }]
-              }
-            ]
-          }
-          EOF
 
           cat > site/dashboard/manifest.json <<EOF
           {
@@ -99,9 +77,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: firmware-binaries
-          path: |
-            site/spi-master/firmware.bin
-            site/dashboard/firmware.bin
+          path: site/dashboard/firmware.bin
           retention-days: 1
 
   deploy:
@@ -127,17 +103,14 @@ jobs:
           name: firmware-binaries
           path: binaries
 
-      - name: Rename binaries for the release
-        run: |
-          mv binaries/spi-master/firmware.bin spi-master-firmware.bin
-          mv binaries/dashboard/firmware.bin dashboard-firmware.bin
+      - name: Rename binary for the release
+        run: mv binaries/firmware.bin dashboard-firmware.bin
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ github.ref_name }}" \
-            spi-master-firmware.bin \
             dashboard-firmware.bin \
             --title "${{ github.ref_name }}" \
             --generate-notes
