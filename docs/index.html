@@ -19,24 +19,39 @@ esp-web-install-button{display:block}
 .note{background:#1a1a1a;border:1px solid var(--line);border-radius:10px;padding:14px 16px;font-size:13px;color:var(--mut);margin-top:24px}
 a{color:var(--acc)}
 code{background:#000;padding:2px 6px;border-radius:4px;font-size:13px}
+ol.quickstart{color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 16px;padding-left:22px}
+ol.quickstart li{margin-bottom:4px}
 </style>
 </head>
 <body>
 <main>
 <h1>PMD2X XIAO Firmware Installer</h1>
-<p class="lead">Version <code>__VERSION__</code>. Flash firmware to a Seeed Studio XIAO ESP32C6 connected to your
+<p class="lead">Flash firmware to a Seeed Studio XIAO ESP32C6 connected to your
 <a href="https://elmorlabs.com/product/elmorlabs-pmd2x-power-measurement-device-2x/">ElmorLabs PMD2X</a>
 directly from this page. Works in Chrome or Edge on desktop or Android (Web Serial
 is not supported in Safari or Firefox). Connect the XIAO over USB first, then
 click Install below and pick its serial port when prompted.</p>
 
 <div class="card">
-<h2>Dashboard</h2>
+<h2>Dashboard <code>__VERSION__</code></h2>
 <p>Web dashboard with live telemetry, WiFi setup page, captive portal, and
-BLE provisioning. Recommended for most users.</p>
+BLE provisioning. Recommended for most users. After flashing, power-cycle
+the PMD2X itself (not just the XIAO) before reconnecting &mdash; otherwise
+it may keep reporting stale or all-zero sensor readings.</p>
 <esp-web-install-button manifest="./dashboard/manifest.json">
   <button slot="activate">Install Dashboard firmware</button>
 </esp-web-install-button>
+
+<h2 style="margin-top:24px">Quick start</h2>
+<ol class="quickstart">
+<li>On your phone or laptop, connect to the WiFi network <code>PMD2-Dashboard</code>
+(password <code>pmd2pmd2</code>).</li>
+<li>A setup page should open automatically; if not, visit
+<a href="http://192.168.4.1">192.168.4.1</a> and enter your home/office
+WiFi network and password.</li>
+<li>Once connected, visit <a href="http://pmd2.local">pmd2.local</a> on that
+same WiFi network to open the dashboard.</li>
+</ol>
 </div>
 
 <div class="card">
@@ -51,8 +66,7 @@ debugging the SPI link to the PMD2X.</p>
 <div class="note">
 Firmware is rebuilt and published here automatically from the
 <a href="https://github.com/ElmorLabs-P1/pmd2x-xiao">pmd2x-xiao</a> repository
-whenever a new version is tagged. After flashing the Dashboard firmware, see
-the repo's README for how to connect it to your WiFi network.
+whenever a new version is tagged.
 </div>
 </main>
 </body>

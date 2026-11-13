@@ -16,7 +16,7 @@ static bool g_captivePortal = false;   // true while running the fallback AP
 
 // ====== Configuration ======
 // Bump this alongside the git tag for each release (see .github/workflows/release.yml).
-static const char* FW_VERSION = "1.0.2";
+static const char* FW_VERSION = "1.0.3";
 static constexpr uint32_t SERIAL_BAUD = 115200;
 static constexpr uint32_t SPI_CLOCK_HZ = 1000000;
 static constexpr uint8_t PMD2_CS_PIN = 17;
@@ -346,6 +346,9 @@ static size_t g_histCount = 0;
 
 static SensorStruct g_sensor = {};
 static bool g_sensorValid = false;
+static uint32_t g_sensorFailCount = 0;         // total implausible frames since boot
+static uint32_t g_sensorFailStreak = 0;        // consecutive implausible frames
+static uint32_t g_sensorLastFailLogMs = 0;     // throttles serial spam on long streaks
 static bool g_sampling = true;
 static uint32_t g_sampleSeq = 0;
 static uint32_t g_lastSampleMs = 0;
@@ -638,7 +641,33 @@ void sampleTick() {
   spiCommandReadRaw(CMD_READ_SENSOR_VALUES, reinterpret_cast<uint8_t*>(&s), sizeof(s));
 
   g_sensorValid = isSensorFramePlausible(s);
-  if (!g_sensorValid) return;
+  if (!g_sensorValid) {
+    g_sensorFailCount++;
+    g_sensorFailStreak++;
+    const uint32_t now = millis();
+    // Log the first failure of a streak immediately, then at most once every
+    // 5s while it continues, so a long dropout doesn't flood the serial log.
+    if (g_sensorFailStreak == 1 || now - g_sensorLastFailLogMs >= 5000) {
+      g_sensorLastFailLogMs = now;
+      const uint8_t* raw = reinterpret_cast<const uint8_t*>(&s);
+      String hex;
+      for (size_t i = 0; i < 16 && i < sizeof(s); ++i) {
+        if (raw[i] < 0x10) hex += '0';
+        hex += String(raw[i], HEX);
+        hex += ' ';
+      }
+      dualPrint("SPI sensor read implausible (streak=" + String(g_sensorFailStreak) +
+                " total=" + String(g_sensorFailCount) + ", t=" + String(now) +
+                "ms): Vdd=" + String(s.Vdd) + " Tchip=" + String(s.Tchip) +
+                " TotalPower=" + String(s.TotalPower) + " first16=" + hex);
+    }
+    return;
+  }
+  if (g_sensorFailStreak > 0) {
+    dualPrint("SPI sensor read recovered after " + String(g_sensorFailStreak) +
+              " implausible frame(s), t=" + String(millis()) + "ms");
+    g_sensorFailStreak = 0;
+  }
 
   g_sensor = s;
   g_sampleSeq++;
@@ -1128,7 +1157,10 @@ void handleApiSensor() {
                   (unsigned)p.Voltage, (unsigned long)p.Current, (unsigned long)p.Power,
                   (unsigned)s.Ocp[i]);
   }
-  if (n > 0 && (size_t)n < sizeof(buf)) snprintf(buf + n, sizeof(buf) - n, "]}");
+  if (n > 0 && (size_t)n < sizeof(buf)) {
+    n += snprintf(buf + n, sizeof(buf) - n, "],\"spiFails\":%lu,\"spiFailStreak\":%lu}",
+                  (unsigned long)g_sensorFailCount, (unsigned long)g_sensorFailStreak);
+  }
 
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", buf);
