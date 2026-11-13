@@ -16,7 +16,7 @@ static bool g_captivePortal = false;   // true while running the fallback AP
 
 // ====== Configuration ======
 // Bump this alongside the git tag for each release (see .github/workflows/release.yml).
-static const char* FW_VERSION = "1.0.3";
+static const char* FW_VERSION = "1.0.4";
 static constexpr uint32_t SERIAL_BAUD = 115200;
 static constexpr uint32_t SPI_CLOCK_HZ = 1000000;
 static constexpr uint8_t PMD2_CS_PIN = 17;
@@ -1117,7 +1117,8 @@ $('info').onclick=async()=>{
     const d=await j('/api/info');
     $('infotxt').textContent='Name:      '+d.name+'\nVendor ID: 0x'+d.vid.toString(16)+'\nProduct:   0x'+d.pid.toString(16)+
       '\nFirmware:  0x'+d.fw.toString(16)+'\nUID:       '+d.uid+'\nConfig:    v'+d.cfg_ver+' crc 0x'+d.crc.toString(16)+
-      '\nAverage:   '+d.avg+'\nOCP scale: '+d.ocp_scale+'\nRotation:  '+d.rotation;
+      '\nAverage:   '+d.avg+'\nOCP scale: '+d.ocp_scale+'\nRotation:  '+d.rotation+
+      '\nDashboard: v'+d.dash_fw;
   }catch(e){$('infotxt').textContent='Could not read device info.'}
   $('dlg').showModal();
 };
@@ -1229,13 +1230,14 @@ void handleApiInfo() {
   DeviceConfigStruct cfg = {};
   spiCommandReadRaw(CMD_READ_CONFIG, reinterpret_cast<uint8_t*>(&cfg), sizeof(cfg));
 
-  char buf[400];
+  char buf[440];
   snprintf(buf, sizeof(buf),
     "{\"name\":\"%s\",\"vid\":%u,\"pid\":%u,\"fw\":%u,\"uid\":\"%s\","
-    "\"cfg_ver\":%u,\"crc\":%u,\"avg\":%ld,\"ocp_scale\":%ld,\"rotation\":%ld}",
+    "\"cfg_ver\":%u,\"crc\":%u,\"avg\":%ld,\"ocp_scale\":%ld,\"rotation\":%ld,"
+    "\"dash_fw\":\"%s\"}",
     text, (unsigned)v.VendorId, (unsigned)v.ProductId, (unsigned)v.FwVersion, uidHex,
     (unsigned)cfg.Version, (unsigned)cfg.Crc,
-    (long)cfg.Average, (long)cfg.OcpScale, (long)cfg.DisplayRotation);
+    (long)cfg.Average, (long)cfg.OcpScale, (long)cfg.DisplayRotation, FW_VERSION);
 
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", buf);
